@@ -13,6 +13,7 @@ import shutil
 import tempfile
 import ftplib
 import gzip
+import subprocess
 from functools import partial
 from tqdm import tqdm
 
@@ -70,41 +71,50 @@ def download(url, path, kind='file',
 
     # Make sure we have directories to dump files
     path = op.expanduser(path)
-
+    
     if len(path) == 0:
         raise ValueError('You must specify a path. For current directory use .')
 
     download_url = _convert_url_to_downloadable(url)
 
-    if replace is False and op.exists(path):
+    if replace is False and op.isfile(path):
         msg = ('Replace is False and data exists, so doing nothing. '
                'Use replace==True to re-download the data.')
     elif kind in ZIP_KINDS:
         # Create new folder for data if we need it
-        if not op.isdir(path):
-            if verbose:
-                tqdm.write('Creating data folder...')
-            os.makedirs(path)
+        if kind == "gz":
+            path_temp_file=path + ".gz"
+            if not os.path.exists(path_temp_file):
+                _fetch_file(download_url, path_temp_file, timeout=timeout,
+                        verbose=verbose, progressbar=progressbar)
+        else:
+            if not op.isdir(path):
+                if verbose:
+                    tqdm.write('Creating data folder...')
+                os.makedirs(path)
 
-        # Download the file to a temporary folder to unzip
-        path_temp = _TempDir()
-        path_temp_file = op.join(path_temp, "tmp.{}".format(kind))
-        _fetch_file(download_url, path_temp_file, timeout=timeout,
-                    verbose=verbose, progressbar=progressbar)
+            # Download the file to a temporary folder to unzip
+            path_temp = _TempDir()
+            path_temp_file = op.join(path_temp, "tmp.{}".format(kind))
+            _fetch_file(download_url, path_temp_file, timeout=timeout,
+                        verbose=verbose, progressbar=progressbar)
 
         # Unzip the file to the out path
         if verbose:
             tqdm.write('Extracting {} file...'.format(kind))
-        if kind == 'zip':
-            zipper = ZipFile
-        elif kind == 'tar':
-            zipper = tarfile.open
-        elif kind == 'gz':
-            zipper = gzip.open
-        elif kind == 'tar.gz':
-            zipper = partial(tarfile.open, mode='r:gz')
-        with zipper(path_temp_file) as myobj:
-            myobj.extractall(path)
+        if kind == "gz":
+            cmd="gunzip {0}".format(path_temp_file)
+            coproc=subprocess.Popen(cmd, shell=True)
+            coproc.wait()
+        else:
+            if kind == 'zip':
+                zipper = ZipFile
+            elif kind == 'tar':
+                zipper = tarfile.open
+            elif kind == 'tar.gz':
+                zipper = partial(tarfile.open, mode='r:gz')
+            with zipper(path_temp_file) as myobj:
+                myobj.extractall(path)
         msg = 'Successfully downloaded / unzipped to {}'.format(path)
     else:
         if not op.isdir(op.dirname(path)):
@@ -235,6 +245,7 @@ def _fetch_file(url, file_name, resume=True,
                            ' Dataset fetching aborted.\nError: %s' % (url, ee))
 
 
+
 def _get_ftp(url, temp_file_name, initial_size, file_size, verbose_bool,
              progressbar, ncols=80):
     """Safely (resume a) download to a file from FTP."""
@@ -273,6 +284,20 @@ def _get_ftp(url, temp_file_name, initial_size, file_size, verbose_bool,
             return _chunk_write(chunk, local_file, progress)
         data.retrbinary(down_cmd, chunk_write)
         data.close()
+
+def get_remote_file_size(url, timeout=10.):
+    file_size = None
+    u = urllib.request.urlopen(url, timeout=timeout)
+    u.close()
+    # this is necessary to follow any redirects
+    url = u.geturl()
+    u = urllib.request.urlopen(url, timeout=timeout)
+    try:
+        file_size = int(u.headers.get('Content-Length', '1').strip())
+    finally:
+        u.close()
+        del u
+    return file_size
 
 def _get_http(url, temp_file_name, initial_size, file_size, verbose_bool,
               progressbar, ncols=80):
