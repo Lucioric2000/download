@@ -54,7 +54,7 @@ If your file is a zip file, you can add the flag::
 in this case, the file will be downloaded, and then unzipped into the folder
 specified by `file_name`.
 
-Supported formats are `'file', 'zip', 'tar', 'tar.gz'`
+Supported formats are `'file', 'zip', 'tar', 'tar.gz', 'gz'`
 Defaults to `file`.
 
 Progress bar
