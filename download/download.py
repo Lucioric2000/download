@@ -12,6 +12,7 @@ import sys
 import shutil
 import tempfile
 import ftplib
+import gzip
 from functools import partial
 from tqdm import tqdm
 
@@ -20,8 +21,8 @@ if sys.version_info[0] == 3:
 else:
     string_types = basestring
 
-ALLOWED_KINDS = ['file', 'tar', 'zip', 'tar.gz']
-ZIP_KINDS = ['tar', 'zip', 'tar.gz']
+ALLOWED_KINDS = ['file', 'tar', 'zip', 'tar.gz', 'gz']
+ZIP_KINDS = ['tar', 'zip', 'tar.gz', 'gz']
 
 
 def download(url, path, kind='file',
@@ -98,6 +99,8 @@ def download(url, path, kind='file',
             zipper = ZipFile
         elif kind == 'tar':
             zipper = tarfile.open
+        elif kind == 'gz':
+            zipper = gzip.open
         elif kind == 'tar.gz':
             zipper = partial(tarfile.open, mode='r:gz')
         with zipper(path_temp_file) as myobj:
